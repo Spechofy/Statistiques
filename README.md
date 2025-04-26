@@ -1,2 +1,2 @@
 # Statistiques
-Microservice des statistiques avec springboot et neo4j
+Microservice des statistiques de l'application spechofy en fast-api et mongoDB
