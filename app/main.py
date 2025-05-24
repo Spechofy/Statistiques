@@ -1,15 +1,33 @@
 from fastapi import FastAPI, HTTPException
-from .schemas import *
+from typing import List
+from .schemas import (
+    CompatibilityRequest,
+    CompatibilityResponse,
+    Genre,
+    Artist,
+    Song,
+    User,
+    UserWithOrientation,
+    Playlist,
+    OrientationCompatibilityResponse,
+)
 from .crud import CRUD
 from .database import db
 from contextlib import asynccontextmanager
 
 app = FastAPI()
 
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):
     yield
     db.close()
+
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the Music Compatibility API"}
+
 
 @app.get("/users/{user_id}/compatibility/top")
 async def get_top_compatible_users(user_id: str, limit: int = 5):
@@ -17,6 +35,7 @@ async def get_top_compatible_users(user_id: str, limit: int = 5):
         return CRUD.get_top_compatible_users(user_id, limit)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/compatibility/", response_model=CompatibilityResponse)
 async def calculate_compatibility(pair: CompatibilityRequest):
@@ -27,6 +46,8 @@ async def calculate_compatibility(pair: CompatibilityRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/genres/", response_model=Genre)
 def create_genre(genre: Genre):
     with db.get_session() as session:
@@ -36,11 +57,14 @@ def create_genre(genre: Genre):
         )
         node = result.single()["g"]
         return {"name": node["name"]}  # Retourne un dict conforme au modèle Genre
+
+
 @app.get("/genres/", response_model=List[Genre])
 def get_genres():
     with db.get_session() as session:
         result = session.run("MATCH (g:Genre) RETURN g.name AS name")
         return [{"name": record["name"]} for record in result]
+
 
 # --- Endpoints pour Artists ---
 @app.post("/artists/", response_model=Artist)
@@ -52,6 +76,7 @@ def create_artist(artist: Artist):
             **artist.model_dump()
         )
         return result.single()["a"]
+
 
 @app.get("/artists/{artist_id}", response_model=Artist)
 def get_artist(artist_id: str):
@@ -65,17 +90,19 @@ def get_artist(artist_id: str):
             raise HTTPException(status_code=404, detail="Artist not found")
         return data["a"]
 
+
 # --- Endpoints pour Songs ---
 @app.post("/songs/", response_model=Song)
 def create_song(song: Song):
     with db.get_session() as session:
         result = session.run(
-            """CREATE (s:Song {id: $id, title: $title, 
+            """CREATE (s:Song {id: $id, title: $title,
                 duration: $duration, explicit: $explicit})
             RETURN s {.*}""",
             **song.model_dump()
         )
         return result.single()["s"]
+
 
 @app.put("/songs/{song_id}", response_model=Song)
 def update_song(song_id: str, song: Song):
@@ -85,16 +112,17 @@ def update_song(song_id: str, song: Song):
             SET s += {title: $title, duration: $duration, explicit: $explicit}
             RETURN s {.*}""",
             id=song_id,
-            **song.dict(exclude={"id"})
+            **song.model_dump(exclude={"id"})
         )
         data = result.single()
         if not data:
             raise HTTPException(status_code=404, detail="Song not found")
         return data["s"]
 
+
 # --- Endpoints pour Users ---
 @app.get("/users/{user_id}", response_model=User)
-def get_artist(user_id: str):
+def get_user(user_id: str):
     with db.get_session() as session:
         result = session.run(
             "MATCH (u:User {id: $id}) RETURN u {.*}",
@@ -104,16 +132,34 @@ def get_artist(user_id: str):
         if not data:
             raise HTTPException(status_code=404, detail="Artist not found")
         return data["u"]
-@app.post("/users/", response_model=User)
-def create_user(user: User):
+
+
+@app.post("/users/", response_model=UserWithOrientation)
+def create_user(user: UserWithOrientation):
     with db.get_session() as session:
         result = session.run(
-            """CREATE (u:User {id: $id, name: $name, gender: $gender,
-                orientation: $orientation, age: $age})
-            RETURN u {.*}""",
-            **user.model_dump()
+            """
+            CREATE (u:User {id: $id, name: $name, gender: $gender, age: $age})
+            WITH u
+            MERGE (o:Orientation {name: $orientation_name})
+            MERGE (u)-[:HAS_ORIENTATION]->(o)
+            RETURN u.id AS id, u.name AS name, u.gender AS gender, u.age AS age, o.name AS orientation
+            """,
+            id=user.id,
+            name=user.name,
+            gender=user.gender,
+            age=user.age,
+            orientation_name=user.orientation.name  # Extract the name attribute
         )
-        return result.single()["u"]
+        record = result.single()
+        return {
+            "id": record["id"],
+            "name": record["name"],
+            "gender": record["gender"],
+            "age": record["age"],
+            "orientation": {"name": record["orientation"]}
+        }
+
 
 @app.delete("/users/{user_id}")
 def delete_user(user_id: str):
@@ -126,17 +172,19 @@ def delete_user(user_id: str):
             raise HTTPException(status_code=404, detail="User not found")
         return {"message": "User deleted"}
 
+
 # --- Endpoints pour Playlists ---
 @app.post("/playlists/", response_model=Playlist)
 def create_playlist(playlist: Playlist):
     with db.get_session() as session:
         result = session.run(
-            """CREATE (p:Playlist {id: $id, name: $name, 
+            """CREATE (p:Playlist {id: $id, name: $name,
                 public: $public, created: $created})
             RETURN p {.*}""",
             **playlist.model_dump()
         )
         return result.single()["p"]
+
 
 @app.get("/playlists/{playlist_id}", response_model=Playlist)
 def get_playlist(playlist_id: str):
@@ -149,6 +197,7 @@ def get_playlist(playlist_id: str):
         if not data:
             raise HTTPException(status_code=404, detail="Playlist not found")
         return data["p"]
+
 
 @app.post("/songs/{song_id}/genres/{genre_name}", status_code=201)
 def add_genre_to_song(song_id: str, genre_name: str):
@@ -168,7 +217,8 @@ def add_genre_to_song(song_id: str, genre_name: str):
             "song_id": data["song_id"],
             "genre_name": data["genre_name"]
         }
-    
+
+
 @app.post("/users/{user_id}/liked_songs/{song_id}", status_code=201)
 def like_song(user_id: str, song_id: str):
     """
@@ -188,6 +238,7 @@ def like_song(user_id: str, song_id: str):
             raise HTTPException(status_code=404, detail="User or Song not found")
         return {"message": "Song liked successfully"}
 
+
 @app.delete("/users/{user_id}/liked_songs/{song_id}")
 def unlike_song(user_id: str, song_id: str):
     """
@@ -206,6 +257,8 @@ def unlike_song(user_id: str, song_id: str):
         if result.single()["count"] == 0:
             raise HTTPException(status_code=404, detail="Like relationship not found")
         return {"message": "Song unliked successfully"}
+
+
 @app.post("/users/{user_id}/owned_playlists/{playlist_id}", status_code=201)
 def assign_playlist_owner(user_id: str, playlist_id: str):
     """
@@ -225,6 +278,7 @@ def assign_playlist_owner(user_id: str, playlist_id: str):
             raise HTTPException(status_code=404, detail="User or Playlist not found")
         return {"message": "Ownership assigned successfully"}
 
+
 @app.delete("/users/{user_id}/owned_playlists/{playlist_id}")
 def remove_playlist_owner(user_id: str, playlist_id: str):
     """
@@ -243,7 +297,8 @@ def remove_playlist_owner(user_id: str, playlist_id: str):
         if result.single()["count"] == 0:
             raise HTTPException(status_code=404, detail="Ownership not found")
         return {"message": "Ownership removed successfully"}
-    
+
+
 @app.post("/playlists/{playlist_id}/songs/{song_id}", status_code=201)
 def add_song_to_playlist(playlist_id: str, song_id: str):
     """
@@ -263,6 +318,7 @@ def add_song_to_playlist(playlist_id: str, song_id: str):
             raise HTTPException(status_code=404, detail="Playlist or Song not found")
         return {"message": "Song added to playlist successfully"}
 
+
 @app.delete("/playlists/{playlist_id}/songs/{song_id}")
 def remove_song_from_playlist(playlist_id: str, song_id: str):
     """
@@ -281,3 +337,15 @@ def remove_song_from_playlist(playlist_id: str, song_id: str):
         if result.single()["count"] == 0:
             raise HTTPException(status_code=404, detail="Song not found in playlist")
         return {"message": "Song removed from playlist successfully"}
+
+
+@app.get("/compatibility/orientation", response_model=OrientationCompatibilityResponse)
+def check_orientation_compatibility(user1_id: str, user2_id: str):
+    score = CRUD.get_orientation_compatibility(user1_id, user2_id)
+    if score is None:
+        raise HTTPException(status_code=404, detail="Compatibility not found")
+    return OrientationCompatibilityResponse(
+        user1_id=user1_id,
+        user2_id=user2_id,
+        compatibility_score=score
+    )
