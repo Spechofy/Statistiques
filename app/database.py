@@ -4,6 +4,7 @@ import os
 
 load_dotenv()
 
+
 class Neo4jConnection:
     def __init__(self):
         self.uri = os.getenv("NEO4J_URI")
@@ -24,6 +25,7 @@ class Neo4jConnection:
 
     def get_session(self):
         return self.driver.session()
+
 
 # Singleton pour la connexion
 db = Neo4jConnection().connect()

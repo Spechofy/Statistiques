@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statistiques-spechofy
+  labels:
+    app: statistiques-spechofy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: statistiques-spechofy
+  template:
+    metadata:
+      labels:
+        app: statistiques-spechofy
+    spec:
+      containers:
+      - name: fastapi-container
+        image: kamy1tb/fastapi-app:latest # Replace with your image
+        ports:
+        - containerPort: 80
+        env:
+        - name: ENVIRONMENT
+          value: "development" 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: statistiques-spechofy
+spec:
+  selector:
+    app: statistiques-spechofy
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: LoadBalancer

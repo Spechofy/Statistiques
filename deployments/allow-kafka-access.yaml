@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kafka-access
+  namespace: kafka
+spec:
+  podSelector:
+    matchLabels:
+      app: kafka
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: stats
+      ports:
+        - protocol: TCP
+          port: 9092
