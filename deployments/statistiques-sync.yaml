@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statistiques-sync-deployment
+  namespace: kafka
+  labels:
+    app: statistiques-sync
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: statistiques-sync
+  template:
+    metadata:
+      labels:
+        app: statistiques-sync
+    spec:
+      containers:
+        - name: statistiques-sync-container
+          image: kamy1tb/statistiques-sync:latest
+          imagePullPolicy: Always
