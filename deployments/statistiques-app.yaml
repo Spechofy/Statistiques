@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statistiques-deployment
+  namespace: stats
+  labels:
+    app: statistiques
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: statistiques
+  template:
+    metadata:
+      labels:
+        app: statistiques
+    spec:
+      containers:
+        - name: statistiques-container
+          image: kamy1tb/statistiques-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8005
+          envFrom:
+            - configMapRef:
+                name: statistiques-env
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: statistiques-service
+  namespace: stats
+spec:
+  selector:
+    app: statistiques
+  ports:
+    - protocol: TCP
+      port: 8005
+      targetPort: 8005
+  type: ClusterIP
