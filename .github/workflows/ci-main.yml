@@ -50,12 +50,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt pytest-cov
 
       - name: Run Unit Tests
-        run: pytest ./tests --junitxml=report.xml
-
-
+        run: |
+          pytest ./tests \
+            --junitxml=report.xml \
+            --cov=./app \
+            --cov-report=xml:coverage.xml
   sonar-analysis:
     name: SonarQube Analysis
     runs-on: ubuntu-latest
