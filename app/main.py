@@ -56,7 +56,7 @@ def create_genre(genre: Genre):
             name=genre.name
         )
         node = result.single()["g"]
-        return {"name": node["name"]}  # Retourne un dict conforme au modèle Genre
+        return {"name": node["name"]}
 
 
 @app.get("/genres/", response_model=List[Genre])
@@ -64,6 +64,47 @@ def get_genres():
     with db.get_session() as session:
         result = session.run("MATCH (g:Genre) RETURN g.name AS name")
         return [{"name": record["name"]} for record in result]
+
+
+@app.get("/genres/{genre_name}", response_model=Genre)
+def get_genre(genre_name: str):
+    with db.get_session() as session:
+        result = session.run(
+            "MATCH (g:Genre {name: $name}) RETURN g {.*}",
+            name=genre_name
+        )
+        data = result.single()
+        if not data:
+            raise HTTPException(status_code=404, detail="Genre not found")
+        return data["g"]
+
+
+@app.delete("/genres/{genre_name}")
+def delete_genre(genre_name: str):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (g:Genre {name: $name})
+            DETACH DELETE g RETURN count(g) AS count""",
+            name=genre_name
+        )
+        if result.single()["count"] == 0:
+            raise HTTPException(status_code=404, detail="Genre not found")
+        return {"message": "Genre deleted successfully"}
+
+
+@app.put("/genres/{genre_name}", response_model=Genre)
+def update_genre(genre_name: str, genre: Genre):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (g:Genre {name: $name})
+            SET g.name = $new_name RETURN g {.*}""",
+            name=genre_name,
+            new_name=genre.name
+        )
+        data = result.single()
+        if not data:
+            raise HTTPException(status_code=404, detail="Genre not found")
+        return data["g"]
 
 
 # --- Endpoints pour Artists ---
@@ -89,6 +130,34 @@ def get_artist(artist_id: str):
         if not data:
             raise HTTPException(status_code=404, detail="Artist not found")
         return data["a"]
+
+
+@app.put("/artists/{artist_id}", response_model=Artist)
+def update_artist(artist_id: str, artist: Artist):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (a:Artist {id: $id})
+            SET a += {name: $name, followers: $followers}
+            RETURN a {.*}""",
+            id=artist_id,
+            **artist.model_dump(exclude={"id"})
+        )
+        data = result.single()
+        if not data:
+            raise HTTPException(status_code=404, detail="Artist not found")
+        return data["a"]
+
+
+@app.delete("/artists/{artist_id}")
+def delete_artist(artist_id: str):
+    with db.get_session() as session:
+        result = session.run(
+            "MATCH (a:Artist {id: $id}) DETACH DELETE a RETURN count(a) AS count",
+            id=artist_id
+        )
+        if result.single()["count"] == 0:
+            raise HTTPException(status_code=404, detail="Artist not found")
+        return {"message": "Artist deleted successfully"}
 
 
 # --- Endpoints pour Songs ---
@@ -118,6 +187,25 @@ def update_song(song_id: str, song: Song):
         if not data:
             raise HTTPException(status_code=404, detail="Song not found")
         return data["s"]
+
+
+@app.get("/songs/", response_model=List[Song])
+def get_songs():
+    with db.get_session() as session:
+        result = session.run("MATCH (s:Song) RETURN s {.*}")
+        return [record["s"] for record in result]
+
+
+@app.delete("/songs/{song_id}")
+def delete_song(song_id: str):
+    with db.get_session() as session:
+        result = session.run(
+            "MATCH (s:Song {id: $id}) DETACH DELETE s RETURN count(s) AS count",
+            id=song_id
+        )
+        if result.single()["count"] == 0:
+            raise HTTPException(status_code=404, detail="Song not found")
+        return {"message": "Song deleted successfully"}
 
 
 # --- Endpoints pour Users ---
@@ -197,6 +285,41 @@ def get_playlist(playlist_id: str):
         if not data:
             raise HTTPException(status_code=404, detail="Playlist not found")
         return data["p"]
+
+
+@app.get("/playlists/", response_model=List[Playlist])
+def get_playlists():
+    with db.get_session() as session:
+        result = session.run("MATCH (p:Playlist) RETURN p {.*}")
+        return [record["p"] for record in result]
+
+
+@app.put("/playlists/{playlist_id}", response_model=Playlist)
+def update_playlist(playlist_id: str, playlist: Playlist):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (p:Playlist {id: $id})
+            SET p += {name: $name, public: $public, created: $created}
+            RETURN p {.*}""",
+            id=playlist_id,
+            **playlist.model_dump(exclude={"id"})
+        )
+        data = result.single()
+        if not data:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        return data["p"]
+
+
+@app.delete("/playlists/{playlist_id}")
+def delete_playlist(playlist_id: str):
+    with db.get_session() as session:
+        result = session.run(
+            "MATCH (p:Playlist {id: $id}) DETACH DELETE p RETURN count(p) AS count",
+            id=playlist_id
+        )
+        if result.single()["count"] == 0:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        return {"message": "Playlist deleted successfully"}
 
 
 @app.post("/songs/{song_id}/genres/{genre_name}", status_code=201)
@@ -349,3 +472,64 @@ def check_orientation_compatibility(user1_id: str, user2_id: str):
         user2_id=user2_id,
         compatibility_score=score
     )
+
+
+# --- Endpoints pour Relations ---
+@app.post("/users/{user_id}/likes_genre/{genre_name}", status_code=201)
+def like_genre(user_id: str, genre_name: str):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (u:User {id: $user_id}), (g:Genre {name: $genre_name})
+            MERGE (u)-[:LIKES_GENRE]->(g)
+            RETURN g.name AS genre_name""",
+            user_id=user_id,
+            genre_name=genre_name
+        )
+        if not result.single():
+            raise HTTPException(status_code=404, detail="User or Genre not found")
+        return {"message": "Genre liked successfully"}
+
+
+@app.delete("/users/{user_id}/likes_genre/{genre_name}")
+def unlike_genre(user_id: str, genre_name: str):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (u:User {id: $user_id})-[r:LIKES_GENRE]->(g:Genre {name: $genre_name})
+            DELETE r
+            RETURN count(r) AS count""",
+            user_id=user_id,
+            genre_name=genre_name
+        )
+        if result.single()["count"] == 0:
+            raise HTTPException(status_code=404, detail="Like relationship not found")
+        return {"message": "Genre unliked successfully"}
+
+
+@app.post("/users/{user_id}/follows/{artist_id}", status_code=201)
+def follow_artist(user_id: str, artist_id: str):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (u:User {id: $user_id}), (a:Artist {id: $artist_id})
+            MERGE (u)-[:FOLLOWS]->(a)
+            RETURN a.id AS artist_id""",
+            user_id=user_id,
+            artist_id=artist_id
+        )
+        if not result.single():
+            raise HTTPException(status_code=404, detail="User or Artist not found")
+        return {"message": "Artist followed successfully"}
+
+
+@app.delete("/users/{user_id}/follows/{artist_id}")
+def unfollow_artist(user_id: str, artist_id: str):
+    with db.get_session() as session:
+        result = session.run(
+            """MATCH (u:User {id: $user_id})-[r:FOLLOWS]->(a:Artist {id: $artist_id})
+            DELETE r
+            RETURN count(r) AS count""",
+            user_id=user_id,
+            artist_id=artist_id
+        )
+        if result.single()["count"] == 0:
+            raise HTTPException(status_code=404, detail="Follow relationship not found")
+        return {"message": "Artist unfollowed successfully"}

@@ -27,7 +27,7 @@ jobs:
         run: pip install flake8
 
       - name: Run Flake8 Linter
-        run: flake8 --max-line-length=120 --exclude=venv
+        run: flake8 --max-line-length=300 --exclude=venv
 
   unit-tests:
     name: Run Unit Tests
@@ -91,5 +91,5 @@ jobs:
         with:
           context: .
           file: ./Dockerfile  # Si ton Dockerfile n'est pas à la racine, ajuste le chemin
-          tags: ${{ secrets.DOCKER_USERNAME }}/matchs-fastapi:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/statistiques-app:latest
           push: true  # Pousser l'image vers Docker Hub

@@ -1,10 +1,7 @@
-fastapi
-uvicorn
-pytest
 httpx
 flake8
 neo4j==5.7.0
 python-dotenv==1.0.0
 pydantic==1.10.7
-kafka-python==2.0.2
+confluent-kafka
 requests==2.31.0

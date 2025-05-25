@@ -7,7 +7,7 @@ load_dotenv()
 
 class Neo4jConnection:
     def __init__(self):
-        self.uri = os.getenv("NEO4J_URI")
+        self.uri = "bolt://4.178.106.81:7687"
         self.user = os.getenv("NEO4J_USER")
         self.password = os.getenv("NEO4J_PASSWORD")
         self.driver = None
