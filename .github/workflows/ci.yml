@@ -1,12 +1,14 @@
-name: CI match microservice main
+name: CI stats microservice dev and feature
 
 on:
   push:
     branches:
-      - main
+      - develop
+      - feature/*
   pull_request:
     branches:
-      - main
+      - develop
+      - feature/*
 
 jobs:
 
